@@ -30,11 +30,21 @@
 
 #include <glm/gtx/transform.hpp>
 
+// If `n` is a multiple of `nearest`, return `n`. Otherwise return the
+// next highest multiple of `nearest`
 static inline size_t
 roundUp(size_t n, size_t nearest) {
   return ((n + (nearest - 1)) / nearest) * nearest;
 }
 
+// Read the entire contents of the file at `path` into a vector and
+// return that vector.
+//
+// Note that this is intended only for reading SPIR-V files, it will
+// round up the byte-size of the file to the nearest multiple of 4 and
+// pad the end of the vector accordingly.
+//
+// Prints a message and calls `std::exit(-1)` on failure.
 static std::vector<char>
 readFile(const std::string &path) {
   std::ifstream file(path, std::ios::ate | std::ios::binary);
@@ -57,6 +67,14 @@ readFile(const std::string &path) {
   return buffer;
 }
 
+// Read SPIR-V from the file at `spirvPath`, create a VkShaderModule for the
+// stage described by `stageBit`, and return a VkPipelinShaderStageCreateInfo
+// struct referencing that module.
+//
+// You must eventually call `vkDestroyShaderModule` on the .module field of the
+// returned structure. Currently this happens at the end of `_initPipelines`.
+//
+// Log and exit on failure.
 VkPipelineShaderStageCreateInfo
 gfx::Engine::_loadShaderStageInfo(const std::string &spirvPath, VkShaderStageFlagBits stageBit) {
   auto spirv = readFile(spirvPath);
@@ -87,6 +105,9 @@ gfx::Engine::_loadShaderStageInfo(const std::string &spirvPath, VkShaderStageFla
   return stageInfo;
 }
 
+// Abstract away the construction of a VkPipelineInputAssemblyStateCreateInfo
+//
+// Used in _initPipelines
 VkPipelineInputAssemblyStateCreateInfo
 gfx::Engine::_inputAssemblyInfo(VkPrimitiveTopology topology) {
   VkPipelineInputAssemblyStateCreateInfo info = {
@@ -100,6 +121,9 @@ gfx::Engine::_inputAssemblyInfo(VkPrimitiveTopology topology) {
   return info;
 }
 
+// Abstract away the construction of a VkPipelineRasterizationStateCreateInfo
+//
+// Used in _initPipelines
 VkPipelineRasterizationStateCreateInfo
 gfx::Engine::_rasterStateInfo(VkPolygonMode polyMode) {
   VkPipelineRasterizationStateCreateInfo info = {
@@ -124,6 +148,8 @@ gfx::Engine::_rasterStateInfo(VkPolygonMode polyMode) {
   return info;
 }
 
+// Loads a mesh into Vulkan buffers and writes the corresponding handles (etc)
+// into the structure pointed to by `mesh`.
 bool
 gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mesh) {
   auto handle    = asset::openMeshFile(path.c_str());
@@ -159,6 +185,9 @@ gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mes
   return true;
 }
 
+// Allocate a Buffer with the given parameters using the VmaAllocator
+//
+// Log and exit on failure.
 void gfx::Engine::_allocBuffer(size_t              size,
 			       VkBufferUsageFlags  vkUsage,
 			       VmaMemoryUsage      memoryUsage,
@@ -188,15 +217,21 @@ void gfx::Engine::_allocBuffer(size_t              size,
   }
 }
 
+
+// Free a buffer allocated by _allocBuffer
 void gfx::Engine::_freeBuffer(Buffer *buf) {
   vmaDestroyBuffer(_allocator, buf->buffer, buf->alloc);
 }
 
+// Free a mesh allocated by _loadMesh
 void gfx::Engine::_freeMesh(Mesh *mesh) {
   _freeBuffer(&mesh->vbuffer);
   _freeBuffer(&mesh->ibuffer);
 }
 
+// Abstract the creation of VkPipelineMultisampleStateCreateInfo
+//
+// Used in _initPipelines
 VkPipelineMultisampleStateCreateInfo
 gfx::Engine::_multisampleInfo() {
   VkPipelineMultisampleStateCreateInfo info = {
@@ -217,6 +252,9 @@ gfx::Engine::_multisampleInfo() {
 }
 
 
+// Abstract the creation of VkPipelineColorBlendAttachmentState
+//
+// Used in _initPipelines
 VkPipelineColorBlendAttachmentState
 gfx::Engine::_colorBlendAttachState() {
   VkPipelineColorBlendAttachmentState state = {
@@ -231,7 +269,9 @@ gfx::Engine::_colorBlendAttachState() {
   return state;
 }
 
-
+// Abstract the creation of VkPipelineDepthStencilStateCreateInfo
+//
+// Used in _initPipelines
 VkPipelineDepthStencilStateCreateInfo
 gfx::Engine::_depthStencilState(bool depthTest, bool depthWrite, VkCompareOp cmp) {
   VkPipelineDepthStencilStateCreateInfo info = {
@@ -251,7 +291,9 @@ gfx::Engine::_depthStencilState(bool depthTest, bool depthWrite, VkCompareOp cmp
   return info;
 }
 
-
+// Abstract the creation of VkPushConstantRange
+//
+// Used in _initPipelines
 VkPushConstantRange
 gfx::Engine::_pushConstantRange() {
   VkPushConstantRange range = {
@@ -264,6 +306,9 @@ gfx::Engine::_pushConstantRange() {
   return range;
 }
 
+// Abstract the creation of VkPipelineLayoutCreateInfo
+//
+// Used in _initPipelines
 VkPipelineLayoutCreateInfo
 gfx::Engine::_pipelineLayoutInfo(VkPushConstantRange *range) {
   VkPipelineLayoutCreateInfo info = {
@@ -281,6 +326,10 @@ gfx::Engine::_pipelineLayoutInfo(VkPushConstantRange *range) {
   return info;
 }
 
+// Here is where we actually initialize our pipelines. Right now there's just
+// one pipeline for rendering static meshes.
+//
+// Log and exit on failure.
 void gfx::Engine::_initPipelines() {
   auto pushRange   = _pushConstantRange();
   auto layoutInfo  = _pipelineLayoutInfo(&pushRange);
@@ -373,11 +422,17 @@ void gfx::Engine::_initPipelines() {
       std::exit(-1);
     }
 
+  // IMPORTANT it's safe to delete VkShaderModule's after the pipeline is built,
+  // we need to make sure they're all deleted here to avoid a leak.
   for (auto &shinfo : shaderStages) {
     vkDestroyShaderModule(_device, shinfo.module, nullptr);
   }
 }
 
+// Abstract the construction of VkImageCreateInfo
+//
+// Used in various places where images are constructed. Mostly in
+// gfx::Engine::init() at the moment.
 VkImageCreateInfo
 gfx::Engine::_imageInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent) {
   VkImageCreateInfo info = {
@@ -400,6 +455,10 @@ gfx::Engine::_imageInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3
   return info;
 }
 
+// Abstract the construction of VkImageCreateInfo
+//
+// Used in various places where image views are constructed. Mostly in
+// gfx::Engine::init() at the moment.
 VkImageViewCreateInfo
 gfx::Engine::_imageViewInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags) {
   VkImageViewCreateInfo info = {
@@ -422,6 +481,14 @@ gfx::Engine::_imageViewInfo(VkFormat format, VkImage image, VkImageAspectFlags a
   return info;
 }
 
+// Monster function where SDL and Vulkan are initialized, and all
+// graphics-related systems with the same lifetime as the engine are
+// initialized.
+//
+// This includes building pipelines and initializing per-frame synchronization
+// primitives.
+//
+// Log and exit on failure.
 void gfx::Engine::init() {
   SDL_Init(SDL_INIT_EVERYTHING);
 
@@ -936,6 +1003,10 @@ void gfx::Engine::init() {
   _initialized = true;
 }
 
+// Helper function to allocate per-frame synchronization primitives, called from
+// Engine::init().
+//
+// Log and exit on failure.
 void gfx::Engine::_initPerFrames() {
   for (auto &frame : _perFrames) {
     VkFenceCreateInfo fenceInfo = {
@@ -979,6 +1050,10 @@ void gfx::Engine::_initPerFrames() {
   }
 }
 
+// Here we can initialize any hard-coded test data used by the engine. Called at
+// the end of Engine::init().
+//
+// Log and exit on failure.
 void gfx::Engine::_initTestData() {
   if (!_loadMesh(".data/monkey.mesh", 1, &_testMesh)) {
     std::cerr << "failed to load .data/cube.mesh" << std::endl;
@@ -986,10 +1061,12 @@ void gfx::Engine::_initTestData() {
   }
 }
 
+// Cleanup after whatever _initTestData did.
 void gfx::Engine::_cleanupTestData() {
   _freeMesh(&_testMesh);
 }
 
+// Cleanup all resources used by the graphics engine, shutdown vulkan and SDL.
 void gfx::Engine::cleanup() {
   if (_initialized) {
     vkDeviceWaitIdle(_device);
@@ -1032,6 +1109,11 @@ void gfx::Engine::cleanup() {
   }
 }
 
+// This is used to synchronize our double-buffered frames. Basically we just
+// wait on the vkQueueSubmit fence to make sure that there's only two frames in
+// flight at any given time.
+//
+// Log and exit on failure.
 gfx::PerFrame *gfx::Engine::_acquireNextFrame() {
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -1049,6 +1131,9 @@ gfx::PerFrame *gfx::Engine::_acquireNextFrame() {
   return frame;
 }
 
+// Allocate a single, non-resetable, primary command buffer from `pool`.
+//
+// Log and exit on failure.
 VkCommandBuffer gfx::Engine::_allocCmdBuffer(VkCommandPool pool) {
   VkCommandBuffer cmdBuf;
   VkCommandBufferAllocateInfo allocInfo = {
@@ -1068,6 +1153,9 @@ VkCommandBuffer gfx::Engine::_allocCmdBuffer(VkCommandPool pool) {
   return cmdBuf;
 }
 
+// Call vkBeginCmdBuffer on `cmdBuf` with the given `flags`.
+//
+// Log and exit on failure.
 void gfx::Engine::_beginCmdBuffer(VkCommandBuffer cmdBuf, uint32_t flags) {
   VkCommandBufferBeginInfo beginInfo = {
     .sType  = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1079,9 +1167,13 @@ void gfx::Engine::_beginCmdBuffer(VkCommandBuffer cmdBuf, uint32_t flags) {
 
   if (vkBeginCommandBuffer(cmdBuf, &beginInfo) != VK_SUCCESS) {
     std::cerr << "Failed to begin command buffer..." << std::endl;
+    std::exit(-1);
   }
 }
 
+// Abstract over calling vkCmdBeginRenderPass on `cmdBuf`
+//
+// Log and exit on failure.
 void
 gfx::Engine::_beginRenderPass(VkCommandBuffer cmdBuf,
 			      VkFramebuffer fb,
@@ -1106,6 +1198,10 @@ gfx::Engine::_beginRenderPass(VkCommandBuffer cmdBuf,
   vkCmdBeginRenderPass(cmdBuf, &rpassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 
+// Draw a frame. Basically, we acquire a frame and swap image, write a bunch of
+// commands to a buffer, submit those commands, and then present the frame.
+//
+// Log and exit on failure.
 void gfx::Engine::draw() {
   PerFrame *frame = _acquireNextFrame();
 
@@ -1228,10 +1324,12 @@ void gfx::Engine::draw() {
   _framesDrawn++;
 }
 
+// Initialize this DescriptorAllocator for use with the given `device`
 void gfx::DescriptorAllocator::init(VkDevice device) {
   _device = device;
 }
 
+// Destroy all VkDescriptorPools in use by the allocator.
 void gfx::DescriptorAllocator::cleanup() {
   for (auto p : _freePools) {
     vkDestroyDescriptorPool(_device, p, nullptr);
@@ -1239,8 +1337,12 @@ void gfx::DescriptorAllocator::cleanup() {
   for (auto p : _usedPools) {
     vkDestroyDescriptorPool(_device, p, nullptr);
   }
+
+  _freePools.resize(0);
+  _usedPools.resize(0);
 }
 
+// Helper to create a descriptor pool. For internal use by the allocator.
 VkDescriptorPool gfx::DescriptorAllocator::createPool(
   size_t count,
   VkDescriptorPoolCreateFlags flags)
@@ -1266,6 +1368,7 @@ VkDescriptorPool gfx::DescriptorAllocator::createPool(
   return descriptorPool;
 }
 
+// Get an unused pool, either from the free-list or by creating a new one.
 VkDescriptorPool gfx::DescriptorAllocator::grabPool() {
   if (_freePools.size() > 0) {
     VkDescriptorPool pool = _freePools.back();
@@ -1276,6 +1379,7 @@ VkDescriptorPool gfx::DescriptorAllocator::grabPool() {
   }
 }
 
+// Allocate a descriptor set with the given layout.
 bool gfx::DescriptorAllocator::allocate(
   VkDescriptorSet *set,
   VkDescriptorSetLayout layout)
@@ -1326,6 +1430,8 @@ bool gfx::DescriptorAllocator::allocate(
   return false;
 }
 
+// Reset all pools allocated by this allocator. This effective frees every
+// DescriptorSet it has been used to allocate.
 void gfx::DescriptorAllocator::resetPools() {
   for (auto p : _usedPools) {
     vkResetDescriptorPool(_device, p, 0);
@@ -1336,16 +1442,20 @@ void gfx::DescriptorAllocator::resetPools() {
   _currentPool = VK_NULL_HANDLE;
 }
 
+// Initialize a DescriptorLayoutCache for the given `device`
 void gfx::DescriptorLayoutCache::init(VkDevice device) {
   _device = device;
 }
 
+// Destroy all layouts created by the cache.
 void gfx::DescriptorLayoutCache::cleanup() {
   for (auto pair : _layoutCache) {
     vkDestroyDescriptorSetLayout(_device, pair.second, nullptr);
   }
 }
 
+// Create a new VkDescriptorSetLayout, or if a layout that matches `info`
+// already exists, return it from the cache.
 VkDescriptorSetLayout
 gfx::DescriptorLayoutCache::createDescriptorLayout(VkDescriptorSetLayoutCreateInfo *info) {
   DescriptorLayoutInfo layoutInfo;
@@ -1383,6 +1493,7 @@ gfx::DescriptorLayoutCache::createDescriptorLayout(VkDescriptorSetLayoutCreateIn
   }
 }
 
+// Equality operator on DescriptorLayoutInfo, for use with the hash map.
 bool gfx::DescriptorLayoutCache::DescriptorLayoutInfo::operator == (const DescriptorLayoutInfo & other) const
 {
   if (other.bindings.size() != bindings.size()) {
@@ -1407,6 +1518,7 @@ bool gfx::DescriptorLayoutCache::DescriptorLayoutInfo::operator == (const Descri
   return true;
 }
 
+// Hash implementation for DescriptorLayoutInfo, for use with the hash map.
 size_t gfx::DescriptorLayoutCache::DescriptorLayoutInfo::hash() const {
   size_t result = bindings.size();
 
@@ -1425,6 +1537,7 @@ size_t gfx::DescriptorLayoutCache::DescriptorLayoutInfo::hash() const {
   return result;
 }
 
+// Create a new, blank DescriptorBuilder
 gfx::DescriptorBuilder gfx::DescriptorBuilder::begin(
   DescriptorLayoutCache *layoutCache,
   DescriptorAllocator *allocator)
@@ -1437,7 +1550,7 @@ gfx::DescriptorBuilder gfx::DescriptorBuilder::begin(
   return builder;
 }
 
-
+// Bind a buffer to the resulting VkDescriptorSet
 gfx::DescriptorBuilder &gfx::DescriptorBuilder::bind_buffer(
   uint32_t binding,
   VkDescriptorBufferInfo *bufferInfo,
@@ -1469,6 +1582,7 @@ gfx::DescriptorBuilder &gfx::DescriptorBuilder::bind_buffer(
   return *this;
 }
 
+// Bind an image to the resulting VkDescriptorSet
 gfx::DescriptorBuilder &gfx::DescriptorBuilder::bind_image(
   uint32_t binding,
   VkDescriptorImageInfo *imageInfo,
@@ -1500,6 +1614,7 @@ gfx::DescriptorBuilder &gfx::DescriptorBuilder::bind_image(
   return *this;
 }
 
+// Build a VkDescriptorSet from this builder.
 bool gfx::DescriptorBuilder::build(VkDescriptorSet &set, VkDescriptorSetLayout &layout) {
   VkDescriptorSetLayoutCreateInfo layoutInfo = {
     .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1522,4 +1637,3 @@ bool gfx::DescriptorBuilder::build(VkDescriptorSet &set, VkDescriptorSetLayout &
 
   return true;
 }
-
