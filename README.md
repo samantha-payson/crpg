@@ -5,10 +5,10 @@ use with a game (or some other application that involves rendering large numbers
 of skinned and static meshes).
 
 The project is called CRPG because I might someday want to make a simple
-"Computer RPG" game with it.
+"Computer RPG" game with it.-
 
-A lot of the base code is based on ideas from [vkguide.dev](), but I have made
-significant modifications and expansions, as well as deviating from their
+A lot of the base code is based on ideas from [vkguide.dev][vkguide], but I have
+made significant modifications and expansions, as well as deviating from their
 designs in many ways.
 
 I've implemented this on a laptop running Arch Linux with integrated graphics
@@ -19,6 +19,8 @@ could make it work with minimal effort.
 The only external dependencies are Vulkan 1.2, SDL2 and the zstd compression
 library. It might be possible to run this code with a lower version of Vulkan if
 you just reduce the version number in `gfx.cc`.
+
+[vkguide]: https://vkguide.dev
 
 ## Current State
 
