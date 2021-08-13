@@ -30,12 +30,16 @@
 #define CRPG_ASSET_H
 
 #include <cstdint>
-#include <glm/glm.hpp>
+
 #include <fstream>
 #include <iostream>
+
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include <vulkan/vulkan.h>
+#include <glm/glm.hpp>
 
 namespace asset {
   typedef uint32_t  AssetID;
@@ -131,32 +135,38 @@ namespace asset {
 		     const StaticVertexData *verts,   uint32_t vertCount,
 		     const uint16_t         *indices, uint32_t indexCount);
 
-  struct StaticMeshFileHandle {
-    std::ifstream        stream;
-    StaticMeshFileHeader header;
-    StaticMeshData       meshes[];
+  struct StaticMeshFileHandleBuffer;
+
+  using StaticMeshFileHandle = std::unique_ptr<StaticMeshFileHandleBuffer>;
+
+  struct StaticMeshFileHandleBuffer {
+    std::ifstream                stream;
+    StaticMeshFileHeader         header;
+    std::vector<StaticMeshData>  meshes;
 
     friend std::ostream & operator <<(std::ostream &os,
-				      const StaticMeshFileHandle *handle);
+				      const StaticMeshFileHandle &handle);
 
     size_t vertexOffsetToBytes(size_t vertOffset) const;
 
     size_t indexOffsetToBytes(size_t indexOffset) const;
   };
 
-  StaticMeshFileHandle *openMeshFile(char const *path);
+  StaticMeshFileHandle openMeshFile(char const *path);
 
-  void closeMeshFile(StaticMeshFileHandle *handle);
+  void closeMeshFile(StaticMeshFileHandle &handle);
 
-  StaticMeshData *getMeshData(StaticMeshFileHandle *handle, MeshID id);
+  StaticMeshData *getMeshData(StaticMeshFileHandle &handle, MeshID id);
 
-  bool readMesh(StaticMeshFileHandle  *handle,
+  bool readMesh(StaticMeshFileHandle &handle,
 		MeshID                id,
 		StaticVertexData      *verts,
 		uint16_t              *indices);
+  
 };
 
 #endif
+
 
 
 
