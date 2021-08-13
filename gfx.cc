@@ -1055,8 +1055,8 @@ void gfx::Engine::_initPerFrames() {
 //
 // Log and exit on failure.
 void gfx::Engine::_initTestData() {
-  if (!_loadMesh(".data/monkey.mesh", 1, &_testMesh)) {
-    std::cerr << "failed to load .data/cube.mesh" << std::endl;
+  if (!_loadMesh(".data/monkey.mesh", ID("asset:mesh:monkey"), &_testMesh)) {
+    std::cerr << "failed to load .data/monkey.mesh" << std::endl;
     std::exit(-1);
   }
 }

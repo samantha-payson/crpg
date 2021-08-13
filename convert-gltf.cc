@@ -33,6 +33,7 @@
 #include "cgltf.h"
 
 #include "asset.h"
+#include "str-id.h"
 
 #define FAILURE(FMT, ...) do {			\
     fprintf (stderr,				\
@@ -43,6 +44,8 @@
     std::exit(-1);				\
   } while (0)					\
   // End of multi-line macro
+
+IDDB iddb;
 
 // This is a specialized parser designed to convert a single-mesh glTF as
 // exported by blender.
@@ -132,7 +135,7 @@ static void staticMeshFromGLTF(asset::StaticMeshData    *meshData,
 	    gltfPath);
   }
 
-  meshData->id           = 1;
+  meshData->id           = iddb.getID(mesh->name);
   meshData->indexOffset  = 0;
   meshData->vertexOffset = 0;
   meshData->indexCount   = indexCount;
@@ -194,17 +197,21 @@ int main(int argc, char const *argv[]) {
     std::exit(-1);
   }
 
+  iddb = IDDB::fromFile(".iddb");
+
   asset::StaticMeshData   meshData;
   asset::StaticVertexData *vertexData;
   uint16_t                *indexData;
 
   staticMeshFromGLTF(&meshData, &vertexData, &indexData, argv[1]);
 
+  iddb.write(".iddb");
+
   asset::writeMeshFile(argv[2], &meshData, 1, vertexData, meshData.vertexCount, indexData, meshData.indexCount);
 
   auto handle = asset::openMeshFile(argv[2]);
 
-  std::cout << handle << std::endl;
+  // std::cout << handle << std::endl;
 
   asset::closeMeshFile(handle);
 

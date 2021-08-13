@@ -27,6 +27,10 @@ MESHDATA = $(patsubst %,.data/%,$(MESHFILES))
 
 all: shaders meshes $(BINFILES)
 
+bin/str-id: str-id.cc
+	@ echo "    [LD]         $@"
+	@ clang++ $(LDFLAGS) $(CXXFLAGS) $^ -o $@
+
 bin/%: .obj/%.o $(OFILES)
 	@ echo "    [LD]         $@"
 	@ clang++ $(LDFLAGS) $(CXXFLAGS) $^ -o $@
@@ -39,10 +43,15 @@ bin/%: .obj/%.o $(OFILES)
 	@ clang++ $(CXXFLAGS) -Wno-nullability-completeness -Wno-unused-variable \
                   -c $< -o $@
 
-.obj/%.o: %.cc
+.obj/%.o: .preproc/%.cc
 	@ mkdir -p .obj
-	@ echo "    [C++]        $<"
+	@ echo "    [C++]        $(patsubst .preproc/%.cc,%.cc,$<)"
 	@ clang++ $(CXXFLAGS) -c $< -o $@
+
+.preproc/%.cc: %.cc bin/str-id
+	@ mkdir -p .preproc
+	@ touch .iddb
+	@ ./bin/str-id .iddb preproc $< > $@
 
 meshes: $(MESHDATA)
 
@@ -69,8 +78,8 @@ run: crpg shaders
 
 clean:
 	@ echo "    [CLEAN]"
-	@ rm -f *.spv crpg
+	@ rm -f *.spv crpg $(BINFILES) bin/str-id
 	@ rm -rf  .obj .data
 
 .PHONY: shaders
-.PRECIOUS: .obj/%.o
+.PRECIOUS: .obj/%.o .preproc/%.cc
