@@ -21,17 +21,19 @@ OFILES  = $(patsubst %.cc,.obj/%.o,$(CCFILES))
 SHADERFILES = triangle.vert triangle.frag static-mesh.vert static-mesh.frag
 SPIRVFILES = $(patsubst %,.data/%.spv,$(SHADERFILES))
 
-MESHFILES = cube.mesh monkey.mesh
+MESHFILES = cube.mesh monkey.mesh fancy-cube.mesh
 
 MESHDATA = $(patsubst %,.data/%,$(MESHFILES))
 
 all: shaders meshes $(BINFILES)
 
 bin/str-id: str-id.cc
+	@ mkdir -p bin
 	@ echo "    [LD]         $@"
 	@ clang++ $(LDFLAGS) $(CXXFLAGS) $^ -o $@
 
 bin/%: .obj/%.o $(OFILES)
+	@ mkdir -p bin
 	@ echo "    [LD]         $@"
 	@ clang++ $(LDFLAGS) $(CXXFLAGS) $^ -o $@
 

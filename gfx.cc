@@ -1055,8 +1055,10 @@ void gfx::Engine::_initPerFrames() {
 //
 // Log and exit on failure.
 void gfx::Engine::_initTestData() {
-  if (!_loadMesh(".data/monkey.mesh", ID("asset:mesh:monkey"), &_testMesh)) {
-    std::cerr << "failed to load .data/monkey.mesh" << std::endl;
+  auto path = ".data/monkey.mesh";
+  auto id   = ID("asset:mesh:monkey");
+  if (!_loadMesh(path, id, &_testMesh)) {
+    std::cerr << "failed to load test-mesh from file '" << path << "'" << std::endl;
     std::exit(-1);
   }
 }
@@ -1242,9 +1244,9 @@ void gfx::Engine::draw() {
 
   // Draw commands go here :D
 
-  glm::vec3 camPos = { 0.0f, 0.0f, -2.0f };
+  glm::vec3 camPos = { 0.0f, 0.5f, 1.5f };
 
-  glm::mat4 view = glm::translate(glm::mat4 { 1.0f }, camPos);
+  glm::mat4 view = glm::lookAt(camPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
 
   glm::mat4 project =
     glm::perspective(glm::radians(70.0f),
