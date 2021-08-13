@@ -175,23 +175,23 @@ asset::StaticVertexData::vertexInputDescription() {
     .offset    = offsetof(asset::StaticVertexData, position),
   };
 
-  VkVertexInputAttributeDescription uv = {
-    .binding   = 0,
-    .location  = 1,
-    .format    = VK_FORMAT_R32G32_SFLOAT,
-    .offset    = offsetof(asset::StaticVertexData, uv),
-  };
-
   VkVertexInputAttributeDescription normal = {
     .binding   = 0,
-    .location  = 2,
+    .location  = 1,
     .format    = VK_FORMAT_R32G32B32_SFLOAT,
     .offset    = offsetof(asset::StaticVertexData, normal),
   };
 
+  VkVertexInputAttributeDescription uv = {
+    .binding   = 0,
+    .location  = 2,
+    .format    = VK_FORMAT_R32G32_SFLOAT,
+    .offset    = offsetof(asset::StaticVertexData, uv),
+  };
+
   inputDesc.attribs.push_back(position);
-  inputDesc.attribs.push_back(uv);
   inputDesc.attribs.push_back(normal);
+  inputDesc.attribs.push_back(uv);
 
   inputDesc.flags = 0;
 
