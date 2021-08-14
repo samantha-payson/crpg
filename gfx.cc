@@ -1259,6 +1259,13 @@ void gfx::Engine::draw() {
 				glm::radians(_framesDrawn * 0.4f),
 				glm::vec3(0, 1, 0));
 
+  vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+
+  VkDeviceSize offset = 0;
+
+  vkCmdBindVertexBuffers(cmdBuf, 0, 1, &_testMesh.vbuffer.buffer, &offset);
+  vkCmdBindIndexBuffer(cmdBuf, _testMesh.ibuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+
   MeshPushConstants constants = {
     .renderMatrix = project * view * model,
   };
@@ -1266,12 +1273,19 @@ void gfx::Engine::draw() {
   vkCmdPushConstants(cmdBuf, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
 		     sizeof(MeshPushConstants), &constants);
 
-  vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+  vkCmdDrawIndexed(cmdBuf, _testMesh.meshData.indexCount, 1, 0, 0, 0);
 
-  VkDeviceSize offset = 0;
 
-  vkCmdBindVertexBuffers(cmdBuf, 0, 1, &_testMesh.vbuffer.buffer, &offset);
-  vkCmdBindIndexBuffer(cmdBuf, _testMesh.ibuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+  model = glm::rotate(glm::translate(glm::mat4 { 1.0f },
+					       glm::vec3(-1.0f, 0.0f, -1.0f)),
+				glm::radians(_framesDrawn * -0.4f),
+				glm::vec3(0, 1, 0));
+
+  constants.renderMatrix = project * view * model;
+
+
+  vkCmdPushConstants(cmdBuf, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+		     sizeof(MeshPushConstants), &constants);
 
   vkCmdDrawIndexed(cmdBuf, _testMesh.meshData.indexCount, 1, 0, 0, 0);
 
