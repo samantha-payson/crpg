@@ -207,13 +207,16 @@ int main(int argc, char const *argv[]) {
 
   iddb.write(".iddb");
 
-  asset::writeMeshFile(argv[2], &meshData, 1, vertexData, meshData.vertexCount, indexData, meshData.indexCount);
+  asset::writeStaticMeshFile(argv[2],
+			     &meshData, 1,
+			     vertexData, meshData.vertexCount,
+			     indexData, meshData.indexCount);
 
-  auto handle = asset::openMeshFile(argv[2]);
+  auto handle = asset::openStaticMeshFile(argv[2]);
 
   // std::cout << handle << std::endl;
 
-  asset::closeMeshFile(handle);
+  handle->close();
 
   return 0;
 }

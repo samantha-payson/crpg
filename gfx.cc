@@ -152,8 +152,8 @@ gfx::Engine::_rasterStateInfo(VkPolygonMode polyMode) {
 // into the structure pointed to by `mesh`.
 bool
 gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mesh) {
-  auto handle    = asset::openMeshFile(path.c_str());
-  auto meshData  = asset::getMeshData(handle, id);
+  auto handle    = asset::openStaticMeshFile(path.c_str());
+  auto meshData  = handle->getMeshData(id);
 
   if (!meshData) return false;
 
@@ -175,12 +175,12 @@ gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mes
   vmaMapMemory(_allocator, mesh->vbuffer.alloc, (void **)&verts);
   vmaMapMemory(_allocator, mesh->ibuffer.alloc, (void **)&indices);
 
-  asset::readMesh(handle, id, verts, indices);
+  handle->readMesh(id, verts, indices);
 
   vmaUnmapMemory(_allocator, mesh->vbuffer.alloc);
   vmaUnmapMemory(_allocator, mesh->ibuffer.alloc);
 
-  asset::closeMeshFile(handle);
+  handle->close();
 
   return true;
 }

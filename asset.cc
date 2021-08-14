@@ -33,10 +33,10 @@
 #include <iostream>
 #include <fstream>
 
-void asset::writeMeshFile(char const             *path,
-			  const StaticMeshData   *meshes,  uint32_t meshCount,
-			  const StaticVertexData *verts,   uint32_t vertexCount,
-			  const uint16_t         *indices, uint32_t indexCount)
+void asset::writeStaticMeshFile(char const             *path,
+				const StaticMeshData   *meshes,  uint32_t meshCount,
+				const StaticVertexData *verts,   uint32_t vertexCount,
+				const uint16_t         *indices, uint32_t indexCount)
 {
   StaticMeshFileHeader header;
 
@@ -55,41 +55,44 @@ void asset::writeMeshFile(char const             *path,
   out.close();
 }
 
-asset::StaticMeshFileHandle asset::openMeshFile(char const *path) {
+asset::StaticMeshFileHandle asset::openStaticMeshFile(char const *path) {
   std::ifstream stream(path, std::ios::binary);
 
   StaticMeshFileHandle handle = std::make_unique<StaticMeshFileHandleBuffer>();
 
-  stream.read((char *)&handle->header, sizeof(StaticMeshFileHeader));
+  stream.read((char *)&handle->_header, sizeof(StaticMeshFileHeader));
 
-  handle->meshes.resize(handle->header.meshCount);
-  stream.read((char *)handle->meshes.data(), handle->header.meshCount * sizeof(StaticMeshData));
+  handle->_meshes.resize(handle->_header.meshCount);
+  stream.read((char *)handle->_meshes.data(),
+	      handle->_header.meshCount * sizeof(StaticMeshData));
 
-  handle->stream = std::move(stream);
+  handle->_stream = std::move(stream);
+
+  handle->_isOpen = true;
 
   return handle;
 }
 
 std::ostream &asset::operator <<(std::ostream &stream, const asset::StaticMeshFileHandle &handle) {
   stream << "StaticMesh {" << std::endl;
-  stream << "  meshCount:   " << handle->header.meshCount << "," << std::endl;
-  stream << "  vertexCount: " << handle->header.vertexCount << "," << std::endl;
-  stream << "  indexCount:  " << handle->header.indexCount << "," << std::endl;
-  for (uint32_t i = 0; i < handle->header.meshCount; i++) {
-    stream << "  mesh " << handle->meshes[i].id << " {" << std::endl;
-    stream << "    vertexOffset: " << handle->meshes[i].vertexOffset << "," << std::endl;
-    stream << "    vertexCount:  " << handle->meshes[i].vertexCount  << "," << std::endl;
-    stream << "    indexOffset:  " << handle->meshes[i].indexOffset  << "," << std::endl;
-    stream << "    indexCount:   " << handle->meshes[i].indexCount   << "," << std::endl;
+  stream << "  meshCount:   " << handle->_header.meshCount << "," << std::endl;
+  stream << "  vertexCount: " << handle->_header.vertexCount << "," << std::endl;
+  stream << "  indexCount:  " << handle->_header.indexCount << "," << std::endl;
+  for (uint32_t i = 0; i < handle->_header.meshCount; i++) {
+    stream << "  mesh " << handle->_meshes[i].id << " {" << std::endl;
+    stream << "    vertexOffset: " << handle->_meshes[i].vertexOffset << "," << std::endl;
+    stream << "    vertexCount:  " << handle->_meshes[i].vertexCount  << "," << std::endl;
+    stream << "    indexOffset:  " << handle->_meshes[i].indexOffset  << "," << std::endl;
+    stream << "    indexCount:   " << handle->_meshes[i].indexCount   << "," << std::endl;
     stream << "    bounds {" << std::endl;
     stream << "      max: vec3("
-	   << handle->meshes[i].bounds.max.x << ", "
-	   << handle->meshes[i].bounds.max.y << ", "
-	   << handle->meshes[i].bounds.max.z << ")" << std::endl;
+	   << handle->_meshes[i].bounds.max.x << ", "
+	   << handle->_meshes[i].bounds.max.y << ", "
+	   << handle->_meshes[i].bounds.max.z << ")" << std::endl;
     stream << "      min: vec3("
-	   << handle->meshes[i].bounds.min.x << ", "
-	   << handle->meshes[i].bounds.min.y << ", "
-	   << handle->meshes[i].bounds.min.z << ")" << std::endl;
+	   << handle->_meshes[i].bounds.min.x << ", "
+	   << handle->_meshes[i].bounds.min.y << ", "
+	   << handle->_meshes[i].bounds.min.z << ")" << std::endl;
     stream << "    }" << std::endl;
     stream << "  }" << std::endl;
   }
@@ -98,50 +101,60 @@ std::ostream &asset::operator <<(std::ostream &stream, const asset::StaticMeshFi
   return stream;
 }
 
-void asset::closeMeshFile(StaticMeshFileHandle &handle) {
-  // Close the stream and run its destructor.
-  handle->stream.close();
-  handle->meshes.clear();
+void asset::StaticMeshFileHandleBuffer::close() {
+  if (_isOpen) {
+    _stream.close();
+    _meshes.clear();
+
+    // This vector can never be used again, so it can't hurt to give the
+    // implementation the opportunity to free storage.
+    _meshes.shrink_to_fit();
+
+    _isOpen = false;
+  }
+}
+
+asset::StaticMeshFileHandleBuffer::~StaticMeshFileHandleBuffer() {
+  close();
 }
 
 asset::StaticMeshData *
-asset::getMeshData(asset::StaticMeshFileHandle &handle, asset::MeshID id) {
-  for (size_t i = 0; i < handle->header.meshCount; i++) {
-    if (handle->meshes[i].id == id) {
-      return &handle->meshes[i];
+asset::StaticMeshFileHandleBuffer::getMeshData(asset::MeshID id) {
+  for (size_t i = 0; i < _header.meshCount; i++) {
+    if (_meshes[i].id == id) {
+      return &_meshes[i];
     }
   }
 
   return nullptr;
 }
 
-bool asset::readMesh(asset::StaticMeshFileHandle  &handle,
-		     asset::MeshID                id,
-		     StaticVertexData             *verts,
-		     uint16_t                     *indices)
+bool asset::StaticMeshFileHandleBuffer::readMesh(asset::MeshID     id,
+						 StaticVertexData  *verts,
+						 uint16_t          *indices)
 {
   int idx = -1;
 
-  for (int i = 0; static_cast<size_t>(i) < handle->header.meshCount; i++) {
-    if (handle->meshes[i].id == id) {
+  for (int i = 0; static_cast<size_t>(i) < _header.meshCount; i++) {
+    if (_meshes[i].id == id) {
       idx = i;
     }
   }
 
   if (idx == -1) return false;
 
-  auto *mesh = &handle->meshes[idx];
+  auto *mesh = &_meshes[idx];
 
-  size_t vertexByteOffs = handle->vertexOffsetToBytes(mesh->vertexOffset);
-  size_t indexByteOffs  = handle->indexOffsetToBytes(mesh->indexOffset);
+  size_t vertexByteOffs = _vertexOffsetToBytes(mesh->vertexOffset);
+  size_t indexByteOffs  = _indexOffsetToBytes(mesh->indexOffset);
 
-  handle->stream.seekg(vertexByteOffs, std::ios::beg);
-  handle->stream.read((char *)verts,
+  _stream.seekg(vertexByteOffs, std::ios::beg);
+  _stream.read((char *)verts,
 		      mesh->vertexCount*sizeof(StaticVertexData));
 
 
-  handle->stream.seekg(indexByteOffs, std::ios::beg);
-  handle->stream.read((char *)indices,
+  _stream.seekg(indexByteOffs, std::ios::beg);
+  _stream.read((char *)indices,
 		      mesh->indexCount*sizeof(uint16_t));
 
   return true;
@@ -189,17 +202,17 @@ asset::StaticVertexData::vertexInputDescription() {
   return inputDesc;
 }
 
-size_t asset::StaticMeshFileHandleBuffer::vertexOffsetToBytes(size_t vertOffset) const {
+size_t asset::StaticMeshFileHandleBuffer::_vertexOffsetToBytes(size_t vertOffset) const {
   return sizeof(StaticMeshFileHeader)
-    + header.meshCount * sizeof(StaticMeshData)
+    + _header.meshCount * sizeof(StaticMeshData)
     + vertOffset * sizeof(StaticVertexData)
     ;
 }
 
-size_t asset::StaticMeshFileHandleBuffer::indexOffsetToBytes(size_t indexOffset) const {
+size_t asset::StaticMeshFileHandleBuffer::_indexOffsetToBytes(size_t indexOffset) const {
   return sizeof(StaticMeshFileHeader)
-    + header.meshCount * sizeof(StaticMeshData)
-    + header.vertexCount * sizeof(StaticVertexData)
+    + _header.meshCount * sizeof(StaticMeshData)
+    + _header.vertexCount * sizeof(StaticVertexData)
     + indexOffset * sizeof(uint16_t)
     ;
 }
