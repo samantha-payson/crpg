@@ -139,8 +139,10 @@ namespace asset {
 
   using StaticMeshFileHandle = std::unique_ptr<StaticMeshFileHandleBuffer>;
 
-  StaticMeshFileHandle openStaticMeshFile(char const *path);
+  StaticMeshFileHandle openStaticMeshFile(std::string const &path);
 
+  // This is the structure that backs a StaticMeshFileHandle. It holds all the
+  // data that's necessary to load meshes from a static mesh file without
   class StaticMeshFileHandleBuffer {
   public:
     ~StaticMeshFileHandleBuffer();
@@ -149,13 +151,11 @@ namespace asset {
 				      const StaticMeshFileHandle &handle);
 
 
-    friend StaticMeshFileHandle openStaticMeshFile(char const *path);
+    friend StaticMeshFileHandle openStaticMeshFile(std::string const &path);
 
     StaticMeshData *getMeshData(MeshID id);
 
     bool readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices);
-
-    void close();
 
   private:
     size_t _vertexOffsetToBytes(size_t vertOffset) const;

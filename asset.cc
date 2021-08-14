@@ -51,11 +51,9 @@ void asset::writeStaticMeshFile(char const             *path,
 
   out.write((char *)verts, sizeof(StaticVertexData)*vertexCount);
   out.write((char *)indices, sizeof(uint16_t)*indexCount);
-
-  out.close();
 }
 
-asset::StaticMeshFileHandle asset::openStaticMeshFile(char const *path) {
+asset::StaticMeshFileHandle asset::openStaticMeshFile(std::string const &path) {
   std::ifstream stream(path, std::ios::binary);
 
   StaticMeshFileHandle handle = std::make_unique<StaticMeshFileHandleBuffer>();
@@ -67,8 +65,6 @@ asset::StaticMeshFileHandle asset::openStaticMeshFile(char const *path) {
 	      handle->_header.meshCount * sizeof(StaticMeshData));
 
   handle->_stream = std::move(stream);
-
-  handle->_isOpen = true;
 
   return handle;
 }
@@ -101,21 +97,8 @@ std::ostream &asset::operator <<(std::ostream &stream, const asset::StaticMeshFi
   return stream;
 }
 
-void asset::StaticMeshFileHandleBuffer::close() {
-  if (_isOpen) {
-    _stream.close();
-    _meshes.clear();
-
-    // This vector can never be used again, so it can't hurt to give the
-    // implementation the opportunity to free storage.
-    _meshes.shrink_to_fit();
-
-    _isOpen = false;
-  }
-}
-
 asset::StaticMeshFileHandleBuffer::~StaticMeshFileHandleBuffer() {
-  close();
+  _stream.close();
 }
 
 asset::StaticMeshData *

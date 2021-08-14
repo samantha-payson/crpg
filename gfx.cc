@@ -180,8 +180,6 @@ gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mes
   vmaUnmapMemory(_allocator, mesh->vbuffer.alloc);
   vmaUnmapMemory(_allocator, mesh->ibuffer.alloc);
 
-  handle->close();
-
   return true;
 }
 
