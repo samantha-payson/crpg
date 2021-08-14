@@ -59,7 +59,7 @@ meshes: $(MESHDATA)
 
 .data/%.mesh: assets/%.glb bin/convert-gltf
 	@ echo "    [CONVERT]    $<"
-	@ ./bin/convert-gltf $< $@
+	@ ./bin/convert-gltf $< $@ .data/library.assets
 
 .data/%.spv: shaders/% .data
 	@ echo "    [GLSL]       $<"

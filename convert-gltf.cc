@@ -29,6 +29,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <filesystem>
+
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
 
@@ -182,14 +184,14 @@ static void staticMeshFromGLTF(asset::StaticMeshData    *meshData,
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc != 3) {
+  if (argc != 4) {
     char const *strippedName = strrchr(argv[0], '/');
 
     fprintf(stderr,
 	    "\n"
 	    "    error: got %d arguments\n"
 	    "\n"
-	    "    usage: %s <gltf filename> <output filename>\n"
+	    "    usage: %s <gltf filename> <output filename> <library filename>\n"
 	    "\n",
 	    argc - 1,
 	    strippedName ? strippedName + 1 : argv[0]);
@@ -197,26 +199,34 @@ int main(int argc, char const *argv[]) {
     std::exit(-1);
   }
 
+  char const *gltfPath  = argv[1];
+  char const *meshPath  = argv[2];
+  char const *libPath   = argv[3];
+
   iddb = IDDB::fromFile(".iddb");
 
   asset::StaticMeshData   meshData;
   asset::StaticVertexData *vertexData;
   uint16_t                *indexData;
 
-  staticMeshFromGLTF(&meshData, &vertexData, &indexData, argv[1]);
+  staticMeshFromGLTF(&meshData, &vertexData, &indexData, gltfPath);
 
   iddb.write(".iddb");
 
-  asset::writeStaticMeshFile(argv[2],
+  asset::writeStaticMeshFile(meshPath,
 			     &meshData, 1,
 			     vertexData, meshData.vertexCount,
 			     indexData, meshData.indexCount);
 
-  auto handle = asset::openStaticMeshFile(argv[2]);
+  if (!std::filesystem::exists(std::filesystem::path(libPath))) {
+    asset::emptyLibraryFileHandle()->write(libPath);
+  }
 
-  // std::cout << handle << std::endl;
+  auto library = asset::openLibraryFile(libPath);
 
-  handle->close();
+  library->addMeshRef(meshData.id, meshPath);
+
+  library->write(argv[3]);
 
   return 0;
 }

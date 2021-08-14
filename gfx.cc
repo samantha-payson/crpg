@@ -152,7 +152,7 @@ gfx::Engine::_rasterStateInfo(VkPolygonMode polyMode) {
 // into the structure pointed to by `mesh`.
 bool
 gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mesh) {
-  auto handle    = asset::openStaticMeshFile(path.c_str());
+  auto handle    = asset::openLibraryFile(path);
   auto meshData  = handle->getMeshData(id);
 
   if (!meshData) return false;
@@ -1053,7 +1053,7 @@ void gfx::Engine::_initPerFrames() {
 //
 // Log and exit on failure.
 void gfx::Engine::_initTestData() {
-  auto path = ".data/monkey.mesh";
+  auto path = ".data/library.assets";
   auto id   = ID("asset:mesh:monkey");
   if (!_loadMesh(path, id, &_testMesh)) {
     std::cerr << "failed to load test-mesh from file '" << path << "'" << std::endl;
@@ -1352,8 +1352,8 @@ void gfx::DescriptorAllocator::cleanup() {
     vkDestroyDescriptorPool(_device, p, nullptr);
   }
 
-  _freePools.resize(0);
-  _usedPools.resize(0);
+  _freePools.clear();
+  _usedPools.clear();
 }
 
 // Helper to create a descriptor pool. For internal use by the allocator.

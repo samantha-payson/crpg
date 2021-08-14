@@ -199,3 +199,121 @@ size_t asset::StaticMeshFileHandleBuffer::_indexOffsetToBytes(size_t indexOffset
     + indexOffset * sizeof(uint16_t)
     ;
 }
+
+asset::LibraryFileHandle asset::openLibraryFile(std::string const & path) {
+  std::ifstream file(path, std::ios::binary);
+
+  LibraryFileHandle handle = std::make_unique<LibraryFileHandleBuffer>();
+
+  if (!file.is_open()) {
+    std::cerr << "Failed to open library file '" << path << "'" << std::endl;
+    std::exit(-1);
+  }
+
+  LibraryFileHeader header;
+
+  // If file.read fails and we don't write to header, this ensures that the
+  // magicNumber won't match.
+  header.magicNumber[0] = '\0';
+
+  file.read((char *)&header, sizeof(LibraryFileHeader));
+
+  if (strncmp(header.magicNumber, LibraryFileHeader::MAGIC_NUMBER, 32)) {
+    std::cerr << "Bad magic number for library file '" << path << "'" << std::endl;
+    std::exit(-1);
+  }
+
+  handle->_assetRefs.resize(header.assetRefCount);
+  handle->_pathData.resize(header.pathByteCount);
+
+  file.read((char *)handle->_assetRefs.data(), header.assetRefCount*sizeof(LibraryAssetRef));
+  file.read((char *)handle->_pathData.data(), header.pathByteCount);
+
+  file.close();
+
+  return handle;
+}
+
+std::ostream & asset::operator <<(std::ostream &os,
+				  const asset::LibraryFileHandle &handle)
+{
+  os << "library {" << std::endl;
+  for (const auto &ref : handle->_assetRefs) {
+    os << "  mesh {" << std::endl;
+    os << "    id:   " << ref.assetID << std::endl;
+    os << "    path: " << (handle->_pathData.data() + ref.pathOffset) << std::endl;
+    os << "  }" << std::endl;
+  }
+  os << std::endl;
+
+  return os;
+}
+
+asset::LibraryFileHandle asset::emptyLibraryFileHandle() {
+  return std::make_unique<LibraryFileHandleBuffer>();
+}
+
+void asset::LibraryFileHandleBuffer::write(const std::string &path) const {
+  LibraryFileHeader header;
+  std::ofstream file(path, std::ios::binary);
+
+  header.assetRefCount = (uint32_t)_assetRefs.size();
+  header.pathByteCount = (uint32_t)_pathData.size();
+  file.write((char const *)&header, sizeof(LibraryFileHeader));
+
+  file.write((char const *)_assetRefs.data(), _assetRefs.size()*sizeof(LibraryAssetRef));
+  file.write((char const *)_pathData.data(),  _pathData.size());
+}
+
+void asset::LibraryFileHandleBuffer::addMeshRef(MeshID id, std::string const &path) {
+  LibraryAssetRef assetRef = {
+    .assetID    = id,
+    .assetType  = AssetType::StaticMesh,
+    .pathOffset = (uint32_t)_pathData.size(),
+  };
+
+  _assetRefs.push_back(assetRef);
+  _pathData.insert(_pathData.end(), path.begin(), path.end());
+  _pathData.push_back('\0');
+}
+
+asset::StaticMeshFileHandle &
+asset::LibraryFileHandleBuffer::_getStaticMeshFileHandle(std::string const &path)
+{
+  auto cached = _staticMeshHandleCache.find(path);
+  if (cached != _staticMeshHandleCache.end()) {
+    return cached->second;
+  } else {
+    return _staticMeshHandleCache.emplace(path, openStaticMeshFile(path)).first->second;
+  }
+}
+
+asset::StaticMeshFileHandle &
+asset::LibraryFileHandleBuffer::_getStaticMeshFileHandle(MeshID id)
+{
+  std::string path;
+  for (const LibraryAssetRef & ref : _assetRefs) {
+    if (ref.assetID == id && ref.assetType == AssetType::StaticMesh) {
+      path = std::string(_pathData.data() + ref.pathOffset);
+    }
+  }
+
+  if (path.empty()) {
+    std::cerr << "Can't find mesh with ID " << id << " in asset library." << std::endl;
+    std::exit(-1);
+  }
+
+  return _getStaticMeshFileHandle(path);
+}
+
+asset::StaticMeshData *asset::LibraryFileHandleBuffer::getMeshData(MeshID id) {
+  auto &handle = _getStaticMeshFileHandle(id);
+
+  return handle->getMeshData(id);
+}
+
+bool asset::LibraryFileHandleBuffer::readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices) {
+  auto &handle = _getStaticMeshFileHandle(id);
+
+  return handle->readMesh(id, verts, indices);
+}

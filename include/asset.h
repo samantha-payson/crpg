@@ -30,6 +30,7 @@
 #define CRPG_ASSET_H
 
 #include <cstdint>
+#include <cstring>
 
 #include <fstream>
 #include <iostream>
@@ -45,6 +46,11 @@ namespace asset {
   typedef uint32_t  AssetID;
   typedef AssetID   MeshID;
   typedef AssetID   TextureID;
+
+  enum class AssetType : uint32_t {
+    StaticMesh  = 0,
+    Texture     = 1,
+  };
 
   constexpr uint32_t NULL_ASSET_ID = 0;
 
@@ -100,10 +106,15 @@ namespace asset {
   };
 
   struct StaticMeshFileHeader {
-    char      magicNumber[32] = "crpg:asset:static-mesh";
+    static constexpr char const *MAGIC_NUMBER = "crpg:asset:static-mesh";
+    char      magicNumber[32];
     uint32_t  meshCount;
     uint32_t  vertexCount;
     uint32_t  indexCount;
+
+    StaticMeshFileHeader() {
+      strcpy(magicNumber, MAGIC_NUMBER);
+    }
   };
 
   struct TextureData {
@@ -112,22 +123,6 @@ namespace asset {
     uint16_t   height;
     uint16_t   components;
     uint32_t   offset; // in bytes
-  };
-
-  struct TextureFileHeader {
-    char      magicNumber[32] = "crpg:asset:texture";
-    uint32_t  textureCount;
-    uint32_t  sampleCount;
-  };
-
-  struct LibraryFileRef {
-    AssetID  assetID;
-    char     path[124];
-  };
-
-  struct LibraryHeader {
-    char     magicNumber[32] = "crpg:asset:library";
-    uint32_t fileRefCount;
   };
 
   void writeStaticMeshFile(char const             *path,
@@ -164,9 +159,68 @@ namespace asset {
     std::ifstream                _stream;
     StaticMeshFileHeader         _header;
     std::vector<StaticMeshData>  _meshes;
+  };
 
-    // This is used to avoid calling close() twice on the ifstream.
-    bool _isOpen = false;
+  struct TextureFileHeader {
+    static constexpr char const *MAGIC_NUMBER = "crpg:asset:texture";
+    char      magicNumber[32];
+    uint32_t  textureCount;
+    uint32_t  sampleCount;
+
+    TextureFileHeader() {
+      strcpy(magicNumber, MAGIC_NUMBER);
+    }
+  };
+
+  struct LibraryAssetRef {
+    AssetID    assetID;
+    AssetType  assetType;
+    uint32_t   pathOffset;
+  };
+
+  struct LibraryFileHeader {
+    static constexpr char const *MAGIC_NUMBER = "crpg:asset:library";
+    char     magicNumber[32];
+    uint32_t assetRefCount;
+    uint32_t pathByteCount;
+
+    LibraryFileHeader() {
+      strcpy(magicNumber, MAGIC_NUMBER);
+    }
+  };
+
+  class LibraryFileHandleBuffer;
+
+  using LibraryFileHandle = std::unique_ptr<LibraryFileHandleBuffer>;
+
+  LibraryFileHandle openLibraryFile(std::string const &path);
+
+  LibraryFileHandle emptyLibraryFileHandle();
+
+  class LibraryFileHandleBuffer {
+  public:
+    friend std::ostream & operator <<(std::ostream &os,
+				      const LibraryFileHandle &handle);
+
+    void write(std::string const &path) const;
+
+
+    friend LibraryFileHandle openLibraryFile(std::string const & path);
+
+    void addMeshRef(MeshID id, const std::string &path);
+
+    StaticMeshData *getMeshData(MeshID id);
+
+    bool readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices);
+
+  private:
+    StaticMeshFileHandle &_getStaticMeshFileHandle(const std::string &path);
+    StaticMeshFileHandle &_getStaticMeshFileHandle(MeshID id);
+
+    std::unordered_map<std::string, StaticMeshFileHandle> _staticMeshHandleCache;
+
+    std::vector<LibraryAssetRef>  _assetRefs;
+    std::vector<char>             _pathData;
   };
 };
 
