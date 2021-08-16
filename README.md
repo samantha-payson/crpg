@@ -37,8 +37,8 @@ becomes desirable.
 
 Planned work includes, in order from sooner to later:
 
-  1. An expanded asset manager that allows loading static meshes and textures
-     from a library, given an identifier.
+  1. ~An expanded asset manager that allows loading static meshes and textures
+     from a library, given an identifier.~
 	 
   2. Fast static mesh rendering via multiDrawIndirect.
 
