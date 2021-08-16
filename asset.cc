@@ -306,14 +306,49 @@ asset::LibraryFileHandleBuffer::_getStaticMeshFileHandle(MeshID id)
   return _getStaticMeshFileHandle(path);
 }
 
-asset::StaticMeshData *asset::LibraryFileHandleBuffer::getMeshData(MeshID id) {
+asset::StaticMeshData *
+asset::LibraryFileHandleBuffer::getMeshData(MeshID id) {
   auto &handle = _getStaticMeshFileHandle(id);
 
   return handle->getMeshData(id);
 }
 
-bool asset::LibraryFileHandleBuffer::readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices) {
+bool
+asset::LibraryFileHandleBuffer::readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices) {
   auto &handle = _getStaticMeshFileHandle(id);
 
   return handle->readMesh(id, verts, indices);
+}
+
+bool
+asset::LibraryFileHandleBuffer::getMultiMeshData(MeshID *ids, StaticMeshData *data, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    auto dataPtr = getMeshData(ids[i]);
+
+    if (!dataPtr) return false;
+
+    data[i] = *dataPtr;
+  }
+
+  return true;
+}
+
+bool
+asset::LibraryFileHandleBuffer::readMultiMesh(
+  MeshID *ids, size_t count,
+  StaticVertexData *verts,
+  uint16_t *indices)
+{
+  for (size_t i = 0; i < count; i++) {
+    auto *meshData = getMeshData(ids[i]);
+
+    if (!meshData) return false;
+
+    if (!readMesh(ids[i], verts, indices)) return false;
+
+    verts   += meshData->vertexCount;
+    indices += meshData->indexCount;
+  }
+
+  return true;
 }

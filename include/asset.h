@@ -213,6 +213,10 @@ namespace asset {
 
     bool readMesh(MeshID id, StaticVertexData *verts, uint16_t *indices);
 
+    bool getMultiMeshData(MeshID *ids, StaticMeshData *data, size_t count);
+
+    bool readMultiMesh(MeshID *ids, size_t count, StaticVertexData *verts, uint16_t *indices);
+
   private:
     StaticMeshFileHandle &_getStaticMeshFileHandle(const std::string &path);
     StaticMeshFileHandle &_getStaticMeshFileHandle(MeshID id);
