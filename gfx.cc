@@ -183,6 +183,81 @@ gfx::Engine::_loadMesh(std::string const &path, asset::MeshID id, gfx::Mesh *mes
   return true;
 }
 
+// Loads multiple meshes into a single pair of buffers and writes the
+// corresponding handles (etc) into the structure pointed to by
+// `mesh`.
+bool
+gfx::Engine::_loadMultiMesh(
+  std::string const &path,
+  asset::MeshID *ids, gfx::MultiMesh *meshes, size_t count)
+{
+  auto handle = asset::openLibraryFile(path);
+  std::vector<asset::StaticMeshData> meshData(count);
+  std::vector<VkDrawIndexedIndirectCommand> cmds(count);
+
+  if (!handle->getMultiMeshData(ids, meshData.data(), count)) return false;
+
+  size_t totalVerts   = 0;
+  size_t totalIndices = 0;
+
+  for (size_t i = 0; i < count; i++) {
+    cmds[i].firstIndex    = totalIndices;
+    cmds[i].indexCount    = meshData[i].indexCount;
+    cmds[i].vertexOffset  = totalVerts;
+
+    totalVerts   += meshData[i].vertexCount;
+    totalIndices += meshData[i].indexCount;
+  }
+
+  _allocBuffer(totalVerts*sizeof(asset::StaticVertexData),
+	       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+	       VMA_MEMORY_USAGE_CPU_TO_GPU,
+	       &meshes->vertexBuffer);
+
+  _allocBuffer(totalIndices*sizeof(uint16_t),
+	       VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+	       VMA_MEMORY_USAGE_CPU_TO_GPU,
+	       &meshes->indexBuffer);
+
+  // In the future we'll want to copy this into a GPU-side buffer.
+
+  asset::StaticVertexData  *verts;
+  uint16_t                 *indices;
+
+  vmaMapMemory(_allocator, meshes->vertexBuffer.alloc, (void **)&verts);
+  vmaMapMemory(_allocator, meshes->indexBuffer.alloc, (void **)&indices);
+
+  if (!handle->readMultiMesh(ids, count, verts, indices)) return false;
+
+  vmaUnmapMemory(_allocator, meshes->vertexBuffer.alloc);
+  vmaUnmapMemory(_allocator, meshes->indexBuffer.alloc);
+
+  meshes->ids  = std::vector(ids, ids + count);
+  meshes->cmds = std::move(cmds);
+
+  return true;
+}
+
+bool
+gfx::Engine::_drawMultiMesh(VkCommandBuffer cmdBuf, MultiMesh *meshes, asset::MeshID id) {
+  int i = 0;
+  for (int j = 0; j < meshes->ids.size(); j++) {
+    if (meshes->ids[j] == id) {
+      i = j;
+    }
+  }
+
+  if (i == -1) return false;
+
+  auto drawCmd = meshes->cmds[i];
+
+  vkCmdDrawIndexed(cmdBuf, drawCmd.indexCount, 1, drawCmd.firstIndex, drawCmd.vertexOffset, 0);
+
+  return true;
+}
+
+
+
 // Allocate a Buffer with the given parameters using the VmaAllocator
 //
 // Log and exit on failure.
@@ -225,6 +300,12 @@ void gfx::Engine::_freeBuffer(Buffer *buf) {
 void gfx::Engine::_freeMesh(Mesh *mesh) {
   _freeBuffer(&mesh->vbuffer);
   _freeBuffer(&mesh->ibuffer);
+}
+
+// Free a mesh allocated by _loadMesh
+void gfx::Engine::_freeMultiMesh(MultiMesh *meshes) {
+  _freeBuffer(&meshes->vertexBuffer);
+  _freeBuffer(&meshes->indexBuffer);
 }
 
 // Abstract the creation of VkPipelineMultisampleStateCreateInfo
@@ -1054,16 +1135,20 @@ void gfx::Engine::_initPerFrames() {
 // Log and exit on failure.
 void gfx::Engine::_initTestData() {
   auto path = ".data/library.assets";
-  auto id   = ID("asset:mesh:monkey");
-  if (!_loadMesh(path, id, &_testMesh)) {
-    std::cerr << "failed to load test-mesh from file '" << path << "'" << std::endl;
+  std::vector ids = {
+    ID("asset:mesh:monkey"),
+    ID("asset:mesh:fancy-cube")
+  };
+
+  if (!_loadMultiMesh(path, ids.data(), &_testMultiMesh, ids.size())) {
+    std::cerr << "failed to load test-meshes from file '" << path << "'" << std::endl;
     std::exit(-1);
   }
 }
 
 // Cleanup after whatever _initTestData did.
 void gfx::Engine::_cleanupTestData() {
-  _freeMesh(&_testMesh);
+  _freeMultiMesh(&_testMultiMesh);
 }
 
 // Cleanup all resources used by the graphics engine, shutdown vulkan and SDL.
@@ -1242,7 +1327,7 @@ void gfx::Engine::draw() {
 
   // Draw commands go here :D
 
-  glm::vec3 camPos = { 0.0f, 0.5f, 1.5f };
+  glm::vec3 camPos = { 0.0f, 0.8f, 1.5f };
 
   glm::mat4 view = glm::lookAt(camPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
 
@@ -1261,8 +1346,8 @@ void gfx::Engine::draw() {
 
   VkDeviceSize offset = 0;
 
-  vkCmdBindVertexBuffers(cmdBuf, 0, 1, &_testMesh.vbuffer.buffer, &offset);
-  vkCmdBindIndexBuffer(cmdBuf, _testMesh.ibuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+  vkCmdBindVertexBuffers(cmdBuf, 0, 1, &_testMultiMesh.vertexBuffer.buffer, &offset);
+  vkCmdBindIndexBuffer(cmdBuf, _testMultiMesh.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
 
   MeshPushConstants constants = {
     .renderMatrix = project * view * model,
@@ -1271,7 +1356,7 @@ void gfx::Engine::draw() {
   vkCmdPushConstants(cmdBuf, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
 		     sizeof(MeshPushConstants), &constants);
 
-  vkCmdDrawIndexed(cmdBuf, _testMesh.meshData.indexCount, 1, 0, 0, 0);
+  _drawMultiMesh(cmdBuf, &_testMultiMesh, ID("asset:mesh:monkey"));
 
 
   model = glm::rotate(glm::translate(glm::mat4 { 1.0f },
@@ -1285,7 +1370,7 @@ void gfx::Engine::draw() {
   vkCmdPushConstants(cmdBuf, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
 		     sizeof(MeshPushConstants), &constants);
 
-  vkCmdDrawIndexed(cmdBuf, _testMesh.meshData.indexCount, 1, 0, 0, 0);
+  _drawMultiMesh(cmdBuf, &_testMultiMesh, ID("asset:mesh:fancy-cube"));
 
   vkCmdEndRenderPass(cmdBuf);
 

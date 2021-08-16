@@ -64,6 +64,14 @@ namespace gfx {
     Buffer  ibuffer;
   };
 
+  struct MultiMesh {
+    std::vector<asset::MeshID>                 ids;
+    std::vector<VkDrawIndexedIndirectCommand>  cmds;
+
+    Buffer  vertexBuffer;
+    Buffer  indexBuffer;
+  };
+
   struct MeshPushConstants {
     glm::mat4 renderMatrix;
   };
@@ -139,7 +147,14 @@ namespace gfx {
 
     bool _loadMesh(std::string const &path, asset::MeshID id, Mesh *mesh);
 
+    bool _loadMultiMesh(
+      std::string const &path,
+      asset::MeshID *ids, MultiMesh *meshes, size_t count);
+
+    bool _drawMultiMesh(VkCommandBuffer cmdBuf, MultiMesh *meshes, asset::MeshID id);
+
     void _freeMesh(Mesh *mesh);
+    void _freeMultiMesh(MultiMesh *mesh);
 
     void _initPerFrames();
 
@@ -202,7 +217,7 @@ namespace gfx {
     void _initTestData();
     void _cleanupTestData();
     //
-    Mesh _testMesh;
+    MultiMesh _testMultiMesh;
     //
     // End test decls
     ////////////////////////////////////
