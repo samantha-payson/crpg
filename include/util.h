@@ -26,66 +26,36 @@
  *
  */
 
-#ifndef CRPG_STR_ID_H
-#define CRPG_STR_ID_H
+#ifndef CRPG_UTIL_H
+#define CRPG_UTIL_H
 
-#include <fstream>
-#include <iostream>
+#include <cstdlib>
 
-#include <map>
-#include <vector>
+#include <string>
 
-class IDDB {
-public:
-  static IDDB fromFile(const std::string &path) {
-    std::ifstream in(path);
+#define __CRPG_32_BIT_PRIME 4294967291
 
-    if (!in.is_open()) {
-      std::cerr << "Failed to open '" << path << "' as ID DB." << std::endl;
-      std::exit(-1);
-    }
+template <size_t N> 
+static inline constexpr uint32_t ID(char const (&s)[N]) noexcept {
+  uint64_t val = 0;
 
-    char buf[1024];
-
-    IDDB db;
-
-    while (!in.eof()) {
-      in.getline(buf, 1024);
-      auto str = std::string(buf);
-      db.getID(str);
-    }
-
-    in.close();
-
-    return db;
+  for (size_t i = 0; i < N - 1; i++) {
+    val  = (val << 8) + (uint32_t)s[i];
+    val %= __CRPG_32_BIT_PRIME;
   }
 
-  uint32_t getID(const std::string &name) {
-    const auto entry = _nameToID.find(name);
-    if (entry != _nameToID.end()) {
-      return entry->second;
-    } else {
-      _idToName.push_back(name);
-      _nameToID.emplace(name, _idToName.size());
+  return (uint32_t)(val & 0xFFFFFFFF);
+}
 
-      return _idToName.size();
-    }
+static inline  uint32_t ID(std::string const &s) {
+  uint64_t val = 0;
+
+  for (auto c : s) {
+    val  = (val << 8) + (uint32_t)c;
+    val %= __CRPG_32_BIT_PRIME;
   }
 
-  void write(const std::string &path) const {
-    std::ofstream out(path);
+  return (uint32_t)(val & 0xFFFFFFFF);
+}
 
-    for (const auto &name : _idToName) {
-      out << name << std::endl;
-    }
-
-    out.close();
-  }
-
-private:
-  std::map<std::string, uint32_t> _nameToID;
-  std::vector<std::string> _idToName;
-};
-
-#endif
-
+#endif // util.h

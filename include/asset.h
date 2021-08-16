@@ -42,6 +42,8 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
+#include "util.h"
+
 namespace asset {
   typedef uint32_t  AssetID;
   typedef AssetID   MeshID;

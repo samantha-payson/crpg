@@ -48,6 +48,7 @@
 
 #include "vk_mem_alloc.h"
 
+#include "util.h"
 #include "asset.h"
 
 namespace gfx {
